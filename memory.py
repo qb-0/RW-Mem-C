@@ -3,11 +3,13 @@ import ctypes
 
 libc = ctypes.CDLL("libc.so.6")
 
+
 class IOVec(ctypes.Structure):
     _fields_ = [
         ("iov_base", ctypes.c_void_p),
         ("iov_len", ctypes.c_size_t)
     ]
+
 
 process_vm_readv = libc.process_vm_readv
 process_vm_readv.argtypes = [
@@ -92,3 +94,6 @@ class Mem:
     def write_string(self, address, string):
         buff = ctypes.create_string_buffer(string.encode())
         return self.write_mem(address, buff)
+
+    def read_array(self, address, c_type, length):
+        return self.read_mem(address, (c_type * length)(), False)[:]
