@@ -1,6 +1,7 @@
 import memory
 from ctypes import *
 
+"""
 class Test(Structure):
     _fields_ = [
         ("x", c_float),
@@ -16,3 +17,8 @@ print(my_struct.x, my_struct.y)
 
 memory.write_mem(17899, 0x024AD224, c_int32(127368))
 print(memory.read_mem(17899, 0x024AD224, c_int32()))
+"""
+
+mem = memory.Mem("cheatengine-x86")
+print(mem.read_string(0x023A0B98))
+print(mem.write_string(0x023A0B98, "Schischaaaaaaaa"))
