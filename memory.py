@@ -83,13 +83,7 @@ class Mem:
         return result
 
     def read_string(self, address, max_length=50):
-        buff = ctypes.create_string_buffer(max_length)
-        read = self.read_mem(address, buff)
-        i = read.find(b"\x00")
-        if i != -1:
-            read = read[:i]
-        read = read.decode()
-        return read
+        return self.read_mem(address, (max_length * ctypes.c_char)()).decode()
 
     def write_string(self, address, string):
         buff = ctypes.create_string_buffer(string.encode())
