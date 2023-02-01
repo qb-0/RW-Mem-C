@@ -53,7 +53,7 @@ class Mem:
                 return int("0x" + l.split("-")[0], 0)
         raise Exception("Module not found")
 
-    def read_mem(self, address, c_type, get_py_value=True):
+    def read(self, address, c_type, get_py_value=True):
         if not isinstance(address, int):
             raise TypeError("Address must be int: {}".format(address))
 
@@ -68,7 +68,7 @@ class Mem:
             return c_type.value
         return c_type
 
-    def write_mem(self, address, data):
+    def write(self, address, data):
         if not isinstance(address, int):
             raise TypeError("Address must be int: {}".format(address))
 
@@ -83,11 +83,11 @@ class Mem:
         return result
 
     def read_string(self, address, max_length=50):
-        return self.read_mem(address, (max_length * ctypes.c_char)()).decode()
+        return self.read(address, (max_length * ctypes.c_char)()).decode()
 
     def write_string(self, address, string):
         buff = ctypes.create_string_buffer(string.encode())
-        return self.write_mem(address, buff)
+        return self.write(address, buff)
 
     def read_array(self, address, c_type, length):
-        return self.read_mem(address, (c_type * length)(), False)[:]
+        return self.read(address, (c_type * length)(), False)[:]
