@@ -6,14 +6,14 @@ isLin = sys.platform == "linux"
 isWin = sys.platform == "win32"
 
 if isLin:
-    libc = ctypes.CDLL("libc.so.6")
-
     class IOVec(ctypes.Structure):
         _fields_ = [
             ("iov_base", ctypes.c_void_p),
             ("iov_len", ctypes.c_size_t)
         ]
 
+
+    libc = ctypes.CDLL("libc.so.6")
 
     process_vm_readv = libc.process_vm_readv
     process_vm_readv.argtypes = [
@@ -37,9 +37,6 @@ if isLin:
     ]
     process_vm_writev.restype = ctypes.c_ssize_t
 elif isWin:
-    kernel32 = ctypes.WinDLL("kernel32.dll")
-    psapi = ctypes.WinDLL("psapi.dll")
-
     class ProcessEntry32(ctypes.Structure):
         _fields_ = [
             ('dwSize', ctypes.c_ulong),
@@ -59,8 +56,12 @@ elif isWin:
         _fields_ = [
             ("lpBaseOfDll", ctypes.c_void_p),
             ("SizeOfImage", ctypes.c_ulong),
-            ("EntryPoint", ctypes.c_void_p), 
+            ("EntryPoint", ctypes.c_void_p),
         ]
+
+
+    kernel32 = ctypes.WinDLL("kernel32.dll")
+    psapi = ctypes.WinDLL("psapi.dll")
 
     GetLastError = kernel32.GetLastError
     GetLastError.restype = ctypes.c_ulong
@@ -115,6 +116,7 @@ elif isWin:
 else:
     exit("Unsupported platform")
 
+
 class Memory:
     def __init__(self, process):
         if isLin and os.getuid() != 0:
@@ -130,16 +132,16 @@ class Memory:
                 if open(f"/proc/{pid}/comm").read().strip() == process_name:
                     return int(pid)
         elif isWin:
-            hSnap = CreateToolhelp32Snapshot(0x2, 0)
+            h_snap = CreateToolhelp32Snapshot(0x2, 0)
             entry = ProcessEntry32()
             entry.dwSize = ctypes.sizeof(entry)
-            result = Process32First(hSnap, ctypes.byref(entry))
+            result = Process32First(h_snap, ctypes.byref(entry))
             while result:
                 if entry.szExeFile.decode() == process_name:
-                    CloseHandle(hSnap)
+                    CloseHandle(h_snap)
                     return entry.th32ProcessID
-                result = Process32Next(hSnap, ctypes.byref(entry))
-            CloseHandle(hSnap)
+                result = Process32Next(h_snap, ctypes.byref(entry))
+            CloseHandle(h_snap)
 
         raise Exception("Process not found")
 
@@ -150,15 +152,15 @@ class Memory:
                     return int("0x" + l.split("-")[0], 0)
         elif isWin:
             module_info = MODULEINFO()
-            hModules = (ctypes.c_void_p * 1024)()
+            h_modules = (ctypes.c_void_p * 1024)()
             EnumProcessModulesEx(
                 self.handle,
-                ctypes.byref(hModules),
-                ctypes.sizeof(hModules),
+                ctypes.byref(h_modules),
+                ctypes.sizeof(h_modules),
                 ctypes.byref(ctypes.c_ulong()),
                 0x03
             )
-            for m in hModules:
+            for m in h_modules:
                 GetModuleInformation(
                     self.handle,
                     ctypes.c_void_p(m),
