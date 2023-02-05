@@ -132,16 +132,16 @@ class Memory:
                 if open(f"/proc/{pid}/comm").read().strip() == process_name:
                     return int(pid)
         elif isWin:
-            h_snap = CreateToolhelp32Snapshot(0x2, 0)
+            snap = CreateToolhelp32Snapshot(0x2, 0)
             entry = ProcessEntry32()
             entry.dwSize = ctypes.sizeof(entry)
-            result = Process32First(h_snap, ctypes.byref(entry))
+            result = Process32First(snap, ctypes.byref(entry))
             while result:
                 if entry.szExeFile.decode() == process_name:
-                    CloseHandle(h_snap)
+                    CloseHandle(snap)
                     return entry.th32ProcessID
-                result = Process32Next(h_snap, ctypes.byref(entry))
-            CloseHandle(h_snap)
+                result = Process32Next(snap, ctypes.byref(entry))
+            CloseHandle(snap)
 
         raise Exception("Process not found")
 
@@ -151,16 +151,16 @@ class Memory:
                 if name in l:
                     return int("0x" + l.split("-")[0], 0)
         elif isWin:
-            h_modules = (ctypes.c_void_p * 1024)()
+            modules = (ctypes.c_void_p * 1024)()
             EnumProcessModulesEx(
                 self.handle,
-                ctypes.byref(h_modules),
-                ctypes.sizeof(h_modules),
+                ctypes.byref(modules),
+                ctypes.sizeof(modules),
                 ctypes.byref(ctypes.c_ulong()),
                 0x03
             )
             module_info = MODULEINFO()
-            for m in h_modules:
+            for m in modules:
                 GetModuleInformation(
                     self.handle,
                     ctypes.c_void_p(m),
