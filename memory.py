@@ -182,7 +182,7 @@ class Memory:
 
     def read(self, address, c_type, get_py_value=True):
         if not isinstance(address, int):
-            raise TypeError("Address must be int: {}".format(address))
+            raise TypeError(f"Address must be int: {address}")
 
         size = ctypes.sizeof(c_type)
         buff = ctypes.create_string_buffer(size)
@@ -201,7 +201,7 @@ class Memory:
 
     def write(self, address, data):
         if not isinstance(address, int):
-            raise TypeError("Address must be int: {}".format(address))
+            raise TypeError(f"Address must be int: {address}")
 
         size = ctypes.sizeof(data)
         buff = ctypes.create_string_buffer(size)
