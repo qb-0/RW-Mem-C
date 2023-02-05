@@ -37,7 +37,8 @@ if isLin:
     ]
     process_vm_writev.restype = ctypes.c_ssize_t
 elif isWin:
-    kernel32 = ctypes.WinDLL('kernel32.dll')
+    kernel32 = ctypes.WinDLL("kernel32.dll")
+    psapi = ctypes.WinDLL("psapi.dll")
 
     class ProcessEntry32(ctypes.Structure):
         _fields_ = [
@@ -54,20 +55,15 @@ elif isWin:
         ]
 
 
-    class ModuleEntry32(ctypes.Structure):
+    class MODULEINFO(ctypes.Structure):
         _fields_ = [
-            ('dwSize', ctypes.c_ulong),
-            ('th32ModuleID', ctypes.c_ulong),
-            ('th32ProcessID', ctypes.c_ulong),
-            ('GlblcntUsage', ctypes.c_ulong),
-            ('ProccntUsage', ctypes.c_ulong),
-            ('modBaseAddr', ctypes.POINTER(ctypes.c_ulonglong)),
-            ('modBaseSize', ctypes.c_ulong),
-            ('hModule', ctypes.c_ulong),
-            ('szModule', ctypes.c_char * 256),
-            ('szExePath', ctypes.c_char * 260)
+            ("lpBaseOfDll", ctypes.c_void_p),
+            ("SizeOfImage", ctypes.c_ulong),
+            ("EntryPoint", ctypes.c_void_p), 
         ]
 
+    GetLastError = kernel32.GetLastError
+    GetLastError.restype = ctypes.c_ulong
 
     OpenProcess = kernel32.OpenProcess
     OpenProcess.restype = ctypes.c_void_p
@@ -88,13 +84,34 @@ elif isWin:
     Process32Next.argtypes = [ctypes.c_void_p , ctypes.POINTER(ProcessEntry32)]
     Process32Next.restype = ctypes.c_long
 
-    Module32First = kernel32.Module32First
-    Module32First.restype = ctypes.c_ulonglong
-    Module32First.argtypes = [ctypes.c_void_p, ctypes.POINTER(ModuleEntry32)]
+    EnumProcessModulesEx = psapi.EnumProcessModulesEx
+    EnumProcessModulesEx.restype = ctypes.c_bool
 
-    Module32Next = kernel32.Module32Next
-    Module32Next.restype = ctypes.c_ulonglong
-    Module32Next.argtypes = [ctypes.c_void_p, ctypes.POINTER(ModuleEntry32)]
+    GetModuleInformation = psapi.GetModuleInformation
+    GetModuleInformation.restype = ctypes.c_bool
+
+    GetModuleBaseNameA = psapi.GetModuleBaseNameA
+    GetModuleBaseNameA.restype = ctypes.c_ulonglong
+
+    ReadProcessMemory = kernel32.ReadProcessMemory
+    ReadProcessMemory.argtypes = (
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t)
+    )
+    ReadProcessMemory.restype = ctypes.c_long
+
+    WriteProcessMemory = kernel32.WriteProcessMemory
+    WriteProcessMemory.argtypes = [
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_void_p,
+        ctypes.c_size_t,
+        ctypes.POINTER(ctypes.c_size_t)
+    ]
+    WriteProcessMemory.restype = ctypes.c_long
 else:
     exit("Unsupported platform")
 
@@ -106,7 +123,6 @@ class Memory:
         self.pid = process if isinstance(process, int) else self.get_pid(process)
         if isWin:
             self.handle = OpenProcess(0x1FFFFF, False, self.pid)
-            print(self.handle)
 
     def get_pid(self, process_name):
         if isLin:
@@ -132,17 +148,35 @@ class Memory:
             for l in open(f"/proc/{self.pid}/maps"):
                 if name in l:
                     return int("0x" + l.split("-")[0], 0)
-            raise Exception("Module not found")
         elif isWin:
-            hSnap = CreateToolhelp32Snapshot(0x18, self.pid)
-            entry = ModuleEntry32()
-            entry.dwSize = ctypes.sizeof(entry)
-            result = Module32First(hSnap, ctypes.byref(entry))
-            print(result)
-            while result:
-                print(hSnap.szModule)
-                result = Module32Next(hSnap, ctypes.byref(entry))
-            CloseHandle(hSnap)
+            module_info = MODULEINFO()
+            hModules = (ctypes.c_void_p * 1024)()
+            EnumProcessModulesEx(
+                self.handle,
+                ctypes.byref(hModules),
+                ctypes.sizeof(hModules),
+                ctypes.byref(ctypes.c_ulong()),
+                0x03
+            )
+            for m in hModules:
+                GetModuleInformation(
+                    self.handle,
+                    ctypes.c_void_p(m),
+                    ctypes.byref(module_info),
+                    ctypes.sizeof(module_info)
+                )
+                if module_info.lpBaseOfDll:
+                    modname = ctypes.c_buffer(260)
+                    GetModuleBaseNameA(
+                        self.handle,
+                        ctypes.c_void_p(module_info.lpBaseOfDll),
+                        modname,
+                        ctypes.sizeof(modname)
+                    )
+                    if modname.value.decode() == name:
+                        return module_info.lpBaseOfDll
+        
+        raise Exception(f"Module '{name}' not found")
 
     def read(self, address, c_type, get_py_value=True):
         if not isinstance(address, int):
@@ -155,6 +189,9 @@ class Memory:
             io_src = IOVec(ctypes.c_void_p(address), size)
             if process_vm_readv(self.pid, ctypes.byref(io_dst), 1, ctypes.byref(io_src), 1, 0) == -1:
                 raise OSError(ctypes.get_errno())
+        elif isWin:
+            if ReadProcessMemory(self.handle, ctypes.c_void_p(address), ctypes.byref(buff), size, None) == 0:
+                raise OSError(GetLastError())
         ctypes.memmove(ctypes.byref(c_type), ctypes.byref(buff), size)
         if get_py_value:
             return c_type.value
@@ -170,10 +207,12 @@ class Memory:
         if isLin:
             io_src = IOVec(ctypes.cast(ctypes.byref(buff), ctypes.c_void_p), size)
             io_dst = IOVec(ctypes.c_void_p(address), size)
-            result = process_vm_writev(self.pid, ctypes.byref(io_src), 1, ctypes.byref(io_dst), 1, 0)
-        if result == -1:
-            raise OSError(ctypes.get_errno())
-        return result
+            if process_vm_writev(self.pid, ctypes.byref(io_src), 1, ctypes.byref(io_dst), 1, 0) == -1:
+                raise OSError(ctypes.get_errno())
+        elif isWin:
+            dst = ctypes.cast(address, ctypes.c_char_p)
+            if WriteProcessMemory(self.handle, dst, buff, size, None) == 0:
+                raise OSError(GetLastError())
 
     def read_string(self, address, max_length=50):
         return self.read(address, (max_length * ctypes.c_char)()).decode()
@@ -184,3 +223,13 @@ class Memory:
 
     def read_array(self, address, c_type, length):
         return self.read(address, (c_type * length)(), False)[:]
+
+    def get_error(self):
+        if isLin:
+            return ctypes.get_errno()
+        elif isWin:
+            return GetLastError()
+
+    def close(self):
+        if isWin:
+            return CloseHandle(self.handle)
