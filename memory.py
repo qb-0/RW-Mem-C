@@ -151,7 +151,6 @@ class Memory:
                 if name in l:
                     return int("0x" + l.split("-")[0], 0)
         elif isWin:
-            module_info = MODULEINFO()
             h_modules = (ctypes.c_void_p * 1024)()
             EnumProcessModulesEx(
                 self.handle,
@@ -160,6 +159,7 @@ class Memory:
                 ctypes.byref(ctypes.c_ulong()),
                 0x03
             )
+            module_info = MODULEINFO()
             for m in h_modules:
                 GetModuleInformation(
                     self.handle,
