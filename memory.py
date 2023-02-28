@@ -2,6 +2,8 @@ import sys
 import os
 import ctypes
 
+from typing import Union, Any
+
 isLin = sys.platform == "linux"
 isWin = sys.platform == "win32"
 
@@ -118,7 +120,7 @@ else:
 
 
 class Memory:
-    def __init__(self, process):
+    def __init__(self, process: Union[str, int]) -> None:
         if isLin and os.getuid() != 0:
             raise OSError("Pymem requires root privileges")
 
@@ -126,7 +128,7 @@ class Memory:
         if isWin:
             self.handle = OpenProcess(0x1FFFFF, False, self.pid)
 
-    def get_pid(self, process_name):
+    def get_pid(self, process_name: str) -> int:
         if isLin:
             for pid in [p for p in os.listdir("/proc") if p.isdigit()]:
                 if open(f"/proc/{pid}/comm").read().strip() == process_name:
@@ -145,7 +147,7 @@ class Memory:
 
         raise Exception("Process not found")
 
-    def module_base(self, name):
+    def module_base(self, name: str) -> int:
         if isLin:
             for l in open(f"/proc/{self.pid}/maps"):
                 if name in l:
@@ -180,7 +182,7 @@ class Memory:
         
         raise Exception(f"Module '{name}' not found")
 
-    def read(self, address, c_type, get_py_value=True):
+    def read(self, address: int, c_type, get_py_value=True) -> Any:
         if not isinstance(address, int):
             raise TypeError(f"Address must be int: {address}")
 
@@ -199,7 +201,7 @@ class Memory:
             return c_type.value
         return c_type
 
-    def write(self, address, data):
+    def write(self, address: int, data: Any) -> int:
         if not isinstance(address, int):
             raise TypeError(f"Address must be int: {address}")
 
@@ -209,29 +211,33 @@ class Memory:
         if isLin:
             io_src = IOVec(ctypes.cast(ctypes.byref(buff), ctypes.c_void_p), size)
             io_dst = IOVec(ctypes.c_void_p(address), size)
-            if process_vm_writev(self.pid, ctypes.byref(io_src), 1, ctypes.byref(io_dst), 1, 0) == -1:
+            result = process_vm_writev(self.pid, ctypes.byref(io_src), 1, ctypes.byref(io_dst), 1, 0)
+            if result == -1:
                 raise OSError(ctypes.get_errno())
+            return result
         elif isWin:
             dst = ctypes.cast(address, ctypes.c_char_p)
-            if WriteProcessMemory(self.handle, dst, buff, size, None) == 0:
+            result = ctypes.c_size_t()
+            if WriteProcessMemory(self.handle, dst, buff, size, ctypes.byref(result)) == 0:
                 raise OSError(GetLastError())
+            return result
 
-    def read_string(self, address, max_length=50):
+    def read_string(self, address: int, max_length: int = 50) -> str:
         return self.read(address, (max_length * ctypes.c_char)()).decode()
 
-    def write_string(self, address, string):
+    def write_string(self, address: int, string: str):
         buff = ctypes.create_string_buffer(string.encode())
         return self.write(address, buff)
 
-    def read_array(self, address, c_type, length):
+    def read_array(self, address: int, c_type, length: int) -> list:
         return self.read(address, (c_type * length)(), False)[:]
 
-    def get_error(self):
+    def get_error(self) -> int:
         if isLin:
             return ctypes.get_errno()
         elif isWin:
             return GetLastError()
 
-    def close(self):
+    def close(self) -> bool:
         if isWin:
-            return CloseHandle(self.handle)
+            return CloseHandle(self.handle) != 0
