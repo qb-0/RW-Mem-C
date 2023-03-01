@@ -2,7 +2,8 @@ import sys
 import os
 import ctypes
 
-from typing import Union, Any
+from typing import Union, Any, Iterator, NamedTuple
+from collections import namedtuple
 
 isLin = sys.platform == "linux"
 isWin = sys.platform == "win32"
@@ -121,36 +122,68 @@ else:
 
 class Memory:
     def __init__(self, process: Union[str, int]) -> None:
+        self.proc_buf = namedtuple("Process", "name pid")
+
         if isLin and os.getuid() != 0:
             raise OSError("Pymem requires root privileges")
 
-        self.pid = process if isinstance(process, int) else self.get_pid(process)
+        if isinstance(process, int):
+            if self.pid_exists(process):
+                self.pid = process if isinstance(process, int) else self.get_pid(process)
+            else:
+                raise Exception(f"Process ID '{process}' does not exist")
+        else:
+            self.pid = self.get_pid(process)
+
         if isWin:
             self.handle = OpenProcess(0x1FFFFF, False, self.pid)
 
-    def get_pid(self, process_name: str) -> int:
+    @property
+    def name(self):
+        for proc in self.enum_processes():
+            if proc.pid == self.pid:
+                return proc.name
+    
+    @property
+    def base(self):
+        return self.module_base(self.name)
+
+    def enum_processes(self) -> Iterator[NamedTuple]:
         if isLin:
             for pid in [p for p in os.listdir("/proc") if p.isdigit()]:
-                if open(f"/proc/{pid}/comm").read().strip() == process_name:
-                    return int(pid)
+                self.proc_buf.name = open(f"/proc/{pid}/comm").read().strip()
+                self.proc_buf.pid = int(pid)
+                yield self.proc_buf
         elif isWin:
             snap = CreateToolhelp32Snapshot(0x2, 0)
             entry = ProcessEntry32()
             entry.dwSize = ctypes.sizeof(entry)
             result = Process32First(snap, ctypes.byref(entry))
             while result:
-                if entry.szExeFile.decode() == process_name:
-                    CloseHandle(snap)
-                    return entry.th32ProcessID
+                self.proc_buf.name = entry.szExeFile.decode()
+                self.proc_buf.pid = entry.th32ProcessID
+                yield self.proc_buf
                 result = Process32Next(snap, ctypes.byref(entry))
             CloseHandle(snap)
 
-        raise Exception("Process not found")
+    def pid_exists(self, pid: int) -> bool:
+        return pid in [p.pid for p in self.enum_processes()]
+
+    def get_pid(self, process_name: str) -> int:
+        for proc in self.enum_processes():
+            if proc.name == process_name:
+                return proc.pid
+        raise Exception(f"Process '{process_name}' not found")
+    
+    def get_name(self, pid: int) -> str:
+        for proc in self.enum_processes():
+            if proc.pid == pid:
+                return proc.name
 
     def module_base(self, name: str) -> int:
         if isLin:
             for l in open(f"/proc/{self.pid}/maps"):
-                if name in l:
+                if name.lower() in l.lower():
                     return int("0x" + l.split("-")[0], 0)
         elif isWin:
             modules = (ctypes.c_void_p * 1024)()
@@ -177,7 +210,7 @@ class Memory:
                         modname,
                         ctypes.sizeof(modname)
                     )
-                    if modname.value.decode() == name:
+                    if modname.value.decode().lower() == name.lower():
                         return module_info.lpBaseOfDll
         
         raise Exception(f"Module '{name}' not found")
