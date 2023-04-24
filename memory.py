@@ -216,9 +216,6 @@ class Memory:
         raise Exception(f"Module '{name}' not found")
 
     def read(self, address: int, c_type, get_py_value=True) -> Any:
-        if not isinstance(address, int):
-            raise TypeError(f"Address must be int: {address}")
-
         size = ctypes.sizeof(c_type)
         buff = ctypes.create_string_buffer(size)
         if isLin:
@@ -235,9 +232,6 @@ class Memory:
         return c_type
 
     def write(self, address: int, data: Any) -> int:
-        if not isinstance(address, int):
-            raise TypeError(f"Address must be int: {address}")
-
         size = ctypes.sizeof(data)
         buff = ctypes.create_string_buffer(size)
         ctypes.memmove(ctypes.byref(buff), ctypes.byref(data), size)
