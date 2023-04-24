@@ -125,7 +125,7 @@ class Memory:
         self.proc_buf = namedtuple("Process", "name pid")
 
         if isLin and os.getuid() != 0:
-            raise OSError("Pymem requires root privileges")
+            raise OSError("Root privileges are required")
 
         if isinstance(process, int):
             if self.pid_exists(process):
