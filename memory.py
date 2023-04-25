@@ -235,8 +235,6 @@ class Memory:
             io_src = IOVec(ctypes.cast(ctypes.byref(data), ctypes.c_void_p), size)
             io_dst = IOVec(ctypes.c_void_p(address), size)
             result = process_vm_writev(self.pid, ctypes.byref(io_src), 1, ctypes.byref(io_dst), 1, 0)
-            if result == -1:
-                raise OSError(ctypes.get_errno())
             return result
         elif isWin:
             result = ctypes.c_size_t()
