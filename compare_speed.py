@@ -86,7 +86,7 @@ def measure_ctypes_mem_struct(n):
     proc.close()
 
 if __name__ == "__main__":
-    its = 105000
+    its = 100000
     measure_pymem(its)
     measure_ctypes_mem(its)
     measure_ctypes_mem_struct(its)

@@ -217,16 +217,14 @@ class Memory:
 
     def read(self, address: int, c_type, get_py_value=True) -> Any:
         size = ctypes.sizeof(c_type)
-        buff = ctypes.create_string_buffer(size)
         if isLin:
-            io_dst = IOVec(ctypes.cast(ctypes.byref(buff), ctypes.c_void_p), size)
+            io_dst = IOVec(ctypes.cast(ctypes.byref(c_type), ctypes.c_void_p), size)
             io_src = IOVec(ctypes.c_void_p(address), size)
             if process_vm_readv(self.pid, ctypes.byref(io_dst), 1, ctypes.byref(io_src), 1, 0) == -1:
                 raise OSError(ctypes.get_errno())
         elif isWin:
-            if ReadProcessMemory(self.handle, ctypes.c_void_p(address), ctypes.byref(buff), size, None) == 0:
+            if ReadProcessMemory(self.handle, ctypes.c_void_p(address), ctypes.byref(c_type), size, None) == 0:
                 raise OSError(GetLastError())
-        ctypes.memmove(ctypes.byref(c_type), ctypes.byref(buff), size)
         if get_py_value:
             return c_type.value
         return c_type
