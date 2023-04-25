@@ -231,10 +231,8 @@ class Memory:
 
     def write(self, address: int, data: Any) -> int:
         size = ctypes.sizeof(data)
-        buff = ctypes.create_string_buffer(size)
-        ctypes.memmove(ctypes.byref(buff), ctypes.byref(data), size)
         if isLin:
-            io_src = IOVec(ctypes.cast(ctypes.byref(buff), ctypes.c_void_p), size)
+            io_src = IOVec(ctypes.cast(ctypes.byref(data), ctypes.c_void_p), size)
             io_dst = IOVec(ctypes.c_void_p(address), size)
             result = process_vm_writev(self.pid, ctypes.byref(io_src), 1, ctypes.byref(io_dst), 1, 0)
             if result == -1:
@@ -243,7 +241,7 @@ class Memory:
         elif isWin:
             dst = ctypes.cast(address, ctypes.c_char_p)
             result = ctypes.c_size_t()
-            if WriteProcessMemory(self.handle, dst, buff, size, ctypes.byref(result)) == 0:
+            if WriteProcessMemory(self.handle, dst, ctypes.cast(ctypes.byref(data), ctypes.c_void_p), size, ctypes.byref(result)) == 0:
                 raise OSError(GetLastError())
             return result
 
