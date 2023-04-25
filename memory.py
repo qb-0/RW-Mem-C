@@ -243,7 +243,7 @@ class Memory:
             result = ctypes.c_size_t()
             if WriteProcessMemory(self.handle, dst, ctypes.cast(ctypes.byref(data), ctypes.c_void_p), size, ctypes.byref(result)) == 0:
                 raise OSError(GetLastError())
-            return result
+            return result.value
 
     def read_string(self, address: int, max_length: int = 50) -> str:
         return self.read(address, (max_length * ctypes.c_char)()).decode()
