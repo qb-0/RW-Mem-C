@@ -239,10 +239,14 @@ class Memory:
                 raise OSError(ctypes.get_errno())
             return result
         elif isWin:
-            dst = ctypes.cast(address, ctypes.c_char_p)
             result = ctypes.c_size_t()
-            if WriteProcessMemory(self.handle, dst, ctypes.cast(ctypes.byref(data), ctypes.c_void_p), size, ctypes.byref(result)) == 0:
-                raise OSError(GetLastError())
+            WriteProcessMemory(
+                self.handle, 
+                ctypes.cast(address, ctypes.c_void_p), 
+                ctypes.cast(ctypes.byref(data), ctypes.c_void_p), 
+                size, 
+                ctypes.byref(result)
+            )
             return result.value
 
     def read_string(self, address: int, max_length: int = 50) -> str:
